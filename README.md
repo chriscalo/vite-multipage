@@ -9,3 +9,4 @@ Contains:
 TODO:
 - [ ] `.scss`
 - [ ] alias `@` to project root
+- [ ] integrate `vue-head`
