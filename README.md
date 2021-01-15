@@ -5,3 +5,7 @@ Contains:
 - Vite dev server
 - Vue 3
 - Multi-page configuration
+
+TODO:
+- [ ] `.scss`
+- [ ] alias `@` to project root
