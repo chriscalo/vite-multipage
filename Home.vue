@@ -6,8 +6,8 @@
 </template>
 
 <script setup>
-  import Counter from "./components/Counter.vue";
-  import Nav from "./components/Nav.vue";
+  import Counter from "~/components/Counter.vue";
+  import Nav from "~/components/Nav.vue";
 </script>
 
-<style lang="scss" src="./style/style.scss"/>
+<style lang="scss" src="~/style/style.scss"/>

@@ -3,6 +3,9 @@ import { join, parse, resolve } from "path";
 
 export default {
   plugins: [vue()],
+  alias: {
+    "~": __dirname,
+  },
   build: {
     rollupOptions: {
       input: entryPoints(

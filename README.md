@@ -5,8 +5,8 @@ Contains:
 - Vite dev server
 - Vue 3
 - Multi-page configuration
+- aliased ~ to project root
 - Sass
 
 TODO:
-- [ ] alias `@` to project root
 - [ ] integrate `vue-head`
