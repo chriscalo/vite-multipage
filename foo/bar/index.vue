@@ -1,14 +1,11 @@
 <template>
+  <img alt="Vue logo" src="/logo.png" />
   <Nav/>
-  /foo/bar/
+  <h1>Foo Bar</h1>
 </template>
 
-<script>
+<script setup>
   import Nav from "../../components/Nav.vue";
-  
-  export default {
-    components: {
-      Nav,
-    },
-  };
 </script>
+
+<style src="../../style/style.css"/>
