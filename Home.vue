@@ -10,4 +10,4 @@
   import Nav from "./components/Nav.vue";
 </script>
 
-<style src="./style/style.css"/>
+<style lang="scss" src="./style/style.scss"/>
