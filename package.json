@@ -3,9 +3,11 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "start": "http-server dist"
   },
   "dependencies": {
+    "http-server": "^0.12.3",
     "vue": "^3.0.5"
   },
   "devDependencies": {
