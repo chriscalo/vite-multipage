@@ -7,13 +7,12 @@
     "start": "http-server dist"
   },
   "dependencies": {
-    "http-server": "^0.12.3",
     "vue": "^3.0.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^1.0.4",
     "@vue/compiler-sfc": "^3.0.5",
     "sass": "^1.32.4",
-    "vite": "^2.0.0-beta.30"
+    "vite": "^2.0.0-beta.47"
   }
 }
