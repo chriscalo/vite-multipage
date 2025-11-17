@@ -12,14 +12,32 @@ on:
 
 jobs:
   claude:
+    # Only run if: 1) User is OWNER, and 2) Message contains @claude
     if: |
-      (github.event.comment.author_association == 'OWNER' ||
-       github.event.review.author_association == 'OWNER' ||
-       github.event.issue.author_association == 'OWNER') &&
-      ((github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))))
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.review.author_association == 'OWNER' ||
+        github.event.issue.author_association == 'OWNER'
+      ) && (
+        (
+          github.event_name == 'issue_comment' &&
+          contains(github.event.comment.body, '@claude')
+        ) ||
+        (
+          github.event_name == 'pull_request_review_comment' &&
+          contains(github.event.comment.body, '@claude')
+        ) ||
+        (
+          github.event_name == 'pull_request_review' &&
+          contains(github.event.review.body, '@claude')
+        ) ||
+        (
+          github.event_name == 'issues' && (
+            contains(github.event.issue.body, '@claude') ||
+            contains(github.event.issue.title, '@claude')
+          )
+        )
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
