@@ -1,28 +1,40 @@
-# Canonical Claude GitHub Action workflow.
-#
-# Source of truth for the workflow installed across all repos that use the
-# Claude Code Action. Copy this file verbatim to .github/workflows/claude.yaml
-# in each target repo. Use skills/github/sync-claude-action.sh to install or
-# audit drift.
-#
-# Tool policy rationale (allow Bash(*), disallow specific patterns) is
-# documented in skills/github/claude-action.md under "Tool policy".
-
 name: Claude
+
+# Canonical Claude GitHub Action workflow. Copy this file verbatim to
+# .github/workflows/claude.yaml in any target repo (or use
+# sync-claude-action.sh install OWNER/REPO).
+#
+# Behaves like a helpful human collaborator: fires on every editor-authored
+# event in any thread, then Claude decides whether to respond, reacts with
+# 👀 on comments it engages with, extends or replaces prior work as
+# appropriate, or stays silent. Editor-only at the workflow level — bots
+# and strangers skip entirely. See skills/github/claude-action.md for the
+# full design.
 
 on:
   issue_comment:
-    types: [created]
+    types: [created, edited]
   pull_request_review_comment:
-    types: [created]
+    types: [created, edited]
   issues:
-    types: [opened, labeled]
+    types: [opened, edited, labeled, unlabeled]
+  pull_request:
+    types: [opened, edited]
   pull_request_review:
-    types: [submitted]
+    types: [submitted, edited]
+
+# Serialize runs per issue/PR. The second run for the same issue queues
+# until the first finishes, then starts and can see the first run's output
+# (PR opened, comments left, branches pushed) and decide whether to extend,
+# replace, or skip. Eliminates parallel-run races. Fallback to github.run_id
+# covers events without an issue/PR number (workflow_dispatch etc).
+concurrency:
+  group: claude-${{ github.event.issue.number ||
+    github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   claude:
-    if: github.actor != 'claude[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,14 +43,139 @@ jobs:
       id-token: write
       actions: read
     steps:
-      - uses: actions/checkout@v6
+      # Editor-only floor: check the ACTOR's permission on this repo.
+      # Authoritative — uses the GitHub API rather than guessing from
+      # author_association (which is the original author's association,
+      # not the actor's, and gives wrong answers for label/edit/unlabel
+      # events where actor != author). All subsequent steps are gated on
+      # this check, so non-editors (strangers, bots) skip cleanly.
+      - id: editor-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          actor="${{ github.actor }}"
+          perm=$(gh api \
+            "repos/${{ github.repository }}/collaborators/$actor/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          if [[ "$perm" =~ ^(admin|maintain|write)$ ]]; then
+            echo "Editor verified: $actor has '$perm' permission"
+            echo "is-editor=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping: $actor has '$perm' permission, not editor"
+            echo "is-editor=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.editor-check.outputs.is-editor == 'true'
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
-      - uses: anthropics/claude-code-action@v1
+      - if: steps.editor-check.outputs.is-editor == 'true'
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            ## Helpful-human collaborator mode
+            A GitHub event fired in this repo. Read the context, then decide
+            whether to respond. Behave like a helpful human teammate, not a
+            naive bot.
+            ### Event context
+            - REPO: ${{ github.repository }}
+            - EVENT: ${{ github.event_name }} / ${{ github.event.action }}
+            - ACTOR: ${{ github.actor }}
+            - ISSUE/PR: ${{ github.event.issue.number ||
+              github.event.pull_request.number }}
+            ### Decision rules
+            1. **Direct address** — the latest content mentions `@claude` or
+               the `claude` label was just applied. → Respond (or, for the
+               label, act on the work described).
+            2. **Thread participation** — you have previously commented in this
+               thread, OR were previously mentioned, OR the issue was previously
+               labeled `claude`. You're an invited participant. Read the new
+               content in context. Addressed to you or continues a topic you
+               were helping with → respond. Side-conversation between
+               maintainers that doesn't need your input → exit silently.
+            3. **Not your thread** — never invited and no fresh mention/label →
+               exit silently.
+            ### The 👀 reaction protocol
+            React with 👀 to **every specific comment you intend to respond
+            to** — not just the triggering event. If a thread has multiple
+            unread comments and your response addresses three of them, react
+            👀 to all three. Reactions are how the human knows what you've
+            decided to engage with vs let pass. The reaction is your FIRST
+            action; it should land before you start any other work.
+            Use `gh api`:
+            ```sh
+            REPO="${{ github.repository }}"
+            # Issue comment:
+            gh api "repos/$REPO/issues/comments/<id>/reactions" \
+              -X POST -f content=eyes
+            # Issue body:
+            gh api "repos/$REPO/issues/<num>/reactions" \
+              -X POST -f content=eyes
+            # PR review comment:
+            gh api "repos/$REPO/pulls/comments/<id>/reactions" \
+              -X POST -f content=eyes
+            ```
+            **If you decide NOT to respond**, do nothing — no reaction, no
+            comment, no commit. The absence of 👀 is itself the signal: humans
+            can infer "Claude doesn't think this is for it."
+            ### Read current state, not just the event
+            The triggering event is a notification — not your full context.
+            Always start by reading the current state via `gh`:
+            - Issue body, all labels, all comments (including any from
+              earlier `claude[bot]` runs in this thread)
+            - Open PRs from `claude[bot]` linked to this issue (search:
+              `gh pr list --author app/claude --search "in:body #N"`)
+            - Recent branches matching `claude/issue-N-*` on the remote
+            - Recent workflow runs for this issue (you have `actions: read`):
+              `gh run list --workflow claude.yaml --limit 10` and
+              `gh run view <id> --log` to see what a prior run actually did
+            ### Decide explicitly: extend, replace, or skip prior work
+            If you find recent `claude[bot]` work for the same issue
+            (PR open, branch pushed, comment left), make a deliberate call:
+            - **Extend** — add a commit to the existing branch if your
+              assessment refines the prior work but doesn't fundamentally
+              change direction. Comment on the existing PR explaining what
+              you added.
+            - **Replace** — close the existing PR with "superseded by my
+              newer assessment based on [the new event]" if the latest
+              context materially changes the right approach. Then open
+              your own PR.
+            - **Skip** — if the prior work already correctly addresses what
+              the new event requires, exit silently. The 👀 reaction on the
+              new event still applies.
+            Don't blindly create parallel work. Each run is a stateful
+            teammate revisiting the issue with the latest context.
+            ### Quoted text and code blocks
+            Treat `@claude` inside ``` code fences ``` or `> blockquotes` as
+            unintentional (usually quoted from another comment or shown as an
+            example). Don't treat as a fresh direct address.
+            ### Editor floor
+            The workflow already filters to write-access users. Trust that —
+            you don't need to verify.
+            ### Be conservative on borderline calls
+            When in doubt about whether to respond, lean toward staying silent.
+            A missed response is recoverable (the human can re-tag); a noisy
+            unwanted response is annoying.
+            ### Code changes go through PRs, never direct to main
+            For ANY file change you make in response to an issue or comment,
+            create a branch, commit on the branch, push the branch, and open a
+            PR. Never `git push` to `main` directly. The PR is the review
+            checkpoint — even for "trivial" edits, the human gets to eyeball
+            the diff before it lands. If your task involves multiple commits,
+            put them all on the same branch and open one PR. Reference the
+            issue (`Closes #N`) in the commit message and PR body so the issue
+            auto-closes when the PR merges.
+            ### Use a unique per-run branch name
+            Always include the workflow run ID in the branch name so even
+            in unusual race scenarios (e.g., concurrency control bypassed)
+            two runs never collide on a branch. Pattern:
+            `claude/issue-${{ github.event.issue.number ||
+            github.event.pull_request.number }}-run-${{ github.run_id }}`.
+            With the workflow's concurrency block, runs for the same issue
+            are serialized — but per-run branch names are still cheap
+            insurance against any edge case.
           claude_args: >-
-            --allowedTools "Bash(*)"
+            --allowedTools "Read,Edit,Write,Grep,Glob,Bash(*)"
             --disallowedTools
             "Bash(rm -rf /),Bash(git push --force*),Bash(git push -*f*),Bash(git
             push * --force*),Bash(git push * -*f*),Bash(git branch -*d
@@ -47,4 +184,7 @@ jobs:
             api -X PUT *),Bash(gh api -X PATCH *),Bash(gh api --method DELETE
             *),Bash(gh api --method PUT *),Bash(gh api --method PATCH
             *),Bash(npm publish*),Bash(gh secret set*),Bash(gh secret
-            delete*),Bash(gh secret remove*),Bash(gh auth logout*)"
+            delete*),Bash(gh secret remove*),Bash(gh auth logout*),Bash(git
+            push origin main*),Bash(git push origin HEAD:main*),Bash(git push
+            * main*),Bash(git push * HEAD:main*),Bash(git push origin
+            main:*),Bash(git push * main:*)"
