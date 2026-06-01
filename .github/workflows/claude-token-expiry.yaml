@@ -1,21 +1,14 @@
 name: Claude Token Expiry Monitor
 
 # Template for the per-repo token expiry monitor.
-# setup-tokens (sync-claude-action.sh) generates the per-repo version by
-# replacing __SCHEDULE_ENTRIES__ with 7 computed cron entries at rotation time:
-#   30, 15, 7, 3, 2, 1, and 0 days before expiry (cron: '0 9 D M *').
-# Each entry fires once per year on its exact date — no daily polling.
+# setup-tokens (sync-claude-action.sh) substitutes three placeholders at
+# rotation time:
+#   __SCHEDULE_ENTRIES__  → 7 cron lines (30/15/7/3/2/1/0 days before
+#                           expiry, format: cron: '0 9 D M *'). Fires
+#                           once per year on each date — no daily polling.
+#   2026-05-09         → ISO date the token was issued ("2026-06-01")
+#   2027-05-09        → ISO date the token expires ("2027-06-01")
 # Do not edit repos directly; re-run setup-tokens to rotate and reschedule.
-#
-# Generated files look like:
-#   schedule:
-#     - cron: '0 9 16 4 *'  # 30 days before expiry (2027-04-16)
-#     - cron: '0 9 1 5 *'   # 15 days before expiry (2027-05-01)
-#     - cron: '0 9 9 5 *'   # 7 days before expiry  (2027-05-09)
-#     - cron: '0 9 13 5 *'  # 3 days before expiry  (2027-05-13)
-#     - cron: '0 9 14 5 *'  # 2 days before expiry  (2027-05-14)
-#     - cron: '0 9 15 5 *'  # 1 day before expiry   (2027-05-15)
-#     - cron: '0 9 16 5 *'  # expiry day             (2027-05-16)
 
 on:
   schedule:
@@ -53,52 +46,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          state_file=".github/claude-token-state.json"
           repo="${{ github.repository }}"
           label="claude-token-expiry"
+          # Dates baked in at rotation time by setup-tokens.
+          issued_at="2026-05-09"
+          expires_on="2027-05-09"
 
-          # Handle missing state file (token set out-of-band, state never written)
-          if [ ! -f "$state_file" ]; then
-            echo "State file missing — expiry date unknown."
-            open_issue=$(gh issue list --repo "$repo" --label "$label" \
-              --state open --json number --jq '.[0].number // ""')
-            if [ -z "$open_issue" ]; then
-              gh issue create --repo "$repo" \
-                --title "⚠️ CLAUDE_CODE_OAUTH_TOKEN expiry date unknown" \
-                --label "$label" \
-                --body "## Claude OAuth Token — Expiry Unknown
-
-The \`CLAUDE_CODE_OAUTH_TOKEN\` secret is set for \`$repo\` but its expiry
-date is not tracked (\`.github/claude-token-state.json\` does not exist).
-
-**Repository:** \`$repo\`
-
-## How to fix
-
-From the \`chriscalo/dev-skills\` repo, run:
-
-\`\`\`bash
-sync-claude-action.sh setup-tokens $repo
-\`\`\`
-
-A browser window will open for Claude authentication. Once you log in, the script will write the state file, schedule notifications for the new expiry date, and close this issue automatically."
-              echo "Opened 'expiry unknown' issue."
-            else
-              echo "Expiry unknown — issue #$open_issue already open. No action."
-            fi
-            exit 0
-          fi
-
-          # Compute days remaining
-          issued_at=$(jq -r '.issued_at' "$state_file")
-          lifetime_days=$(jq -r '.lifetime_days' "$state_file")
-          issued_epoch=$(date -d "$issued_at" +%s)
           today_epoch=$(date -d "$(date +%Y-%m-%d)" +%s)
-          days_elapsed=$(( (today_epoch - issued_epoch) / 86400 ))
-          days_remaining=$(( lifetime_days - days_elapsed ))
-          expires_on=$(date -d "$issued_at + $lifetime_days days" +%Y-%m-%d)
+          expires_epoch=$(date -d "$expires_on" +%s)
+          days_remaining=$(( (expires_epoch - today_epoch) / 86400 ))
 
-          echo "issued=$issued_at  lifetime=${lifetime_days}d  elapsed=${days_elapsed}d  remaining=${days_remaining}d  expires=$expires_on"
+          echo "issued=$issued_at  expires=$expires_on  remaining=${days_remaining}d"
 
           # Match against expected notification thresholds (±1 day tolerance
           # for GitHub scheduling delays). Use the lowest match so a token
@@ -164,9 +122,8 @@ sync-claude-action.sh setup-tokens
 A browser window will open for Claude authentication. Once you log in, the script automatically:
 1. Issues a fresh \`CLAUDE_CODE_OAUTH_TOKEN\`
 2. Pushes the new secret to all managed repos
-3. Records the new expiry date (\`.github/claude-token-state.json\`)
-4. Reschedules expiry notifications for the new date
-5. Closes this issue
+3. Rewrites the expiry workflow with the new dates baked in
+4. Closes this issue
 
 **To renew just this repo** (without touching others):
 \`\`\`bash
