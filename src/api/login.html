@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Log In</title>
+  </head>
+  <body>
+    <h1>Log In</h1>
+    <form id="login-form">
+      <label>
+        Name
+        <input type="text" name="name" required />
+      </label>
+      <button type="submit">Log In</button>
+    </form>
+    <script>
+      document.getElementById("login-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = e.target.elements.name.value;
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          window.location.href = "/";
+        }
+      });
+    </script>
+  </body>
+</html>
