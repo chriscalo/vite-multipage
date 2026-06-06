@@ -1,9 +1,8 @@
-import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
-const html = readFileSync(new URL("404.html", import.meta.url), "utf8");
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default function notFound(req, res) {
-  res.statusCode = 404;
-  res.setHeader("content-type", "text/html");
-  res.end(html);
+  res.status(404).sendFile(join(__dirname, "404.html"));
 }

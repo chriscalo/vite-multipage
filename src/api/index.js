@@ -21,7 +21,7 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-export function requireUser(req, res, next) {
+export function requireLogin(req, res, next) {
   if (!req.session?.user) {
     return res.status(401).json({ error: "unauthorized" });
   }
