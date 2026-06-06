@@ -22,7 +22,7 @@ app.get("/login", (req, res) => {
   res.sendFile(join(__dirname, "login.html"));
 });
 
-app.post("/api/login", express.json(), (req, res) => {
+app.post("/api/login", express.urlencoded({ extended: false }), (req, res) => {
   req.session.user = { name: req.body.name };
   res.json({ ok: true });
 });

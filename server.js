@@ -6,13 +6,19 @@ import notFound from "./src/api/404.js";
 app.use(express.static("dist"));
 app.use(notFound);
 
+async function listen(app, port) {
+  const listener = createServer(app);
+
+  await new Promise((resolve, reject) => {
+    listener.listen(port);
+    listener.once("listening", resolve);
+    listener.once("error", reject);
+  });
+
+  const url = `http://localhost:${port}`;
+  return { url, port, listener };
+}
+
 const port = Number(process.env.PORT) || 3000;
-const server = createServer(app);
-
-await new Promise((resolve, reject) => {
-  server.listen(port);
-  server.once("listening", resolve);
-  server.once("error", reject);
-});
-
-console.log(`Listening on http://localhost:${port}`);
+const { url } = await listen(app, port);
+console.log(`Listening on ${url}`);
