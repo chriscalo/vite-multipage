@@ -27,6 +27,10 @@ app.post("/api/login", express.urlencoded({ extended: false }), (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/logout", (req, res) => {
+  res.sendFile(join(__dirname, "logout.html"));
+});
+
 app.post("/api/logout", (req, res) => {
   req.session.reset();
   res.json({ ok: true });

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Log Out</title>
+  </head>
+  <body>
+    <h1>Log Out</h1>
+    <form>
+      <button type="submit">Log Out</button>
+    </form>
+    <script>
+      document.querySelector("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const res = await fetch("/api/logout", { method: "POST" });
+        if (res.ok) {
+          window.location.href = "/login";
+        }
+      });
+    </script>
+  </body>
+</html>
