@@ -309,6 +309,7 @@ jobs:
             For any other non-zero exit, surface the stderr so the human
             can fix the configuration.
           claude_args: >-
+            --model opus
             --allowedTools "Read,Grep,Glob,Edit,Write,Skill,Task,Agent,Bash(*),WebFetch,WebSearch"
             --disallowedTools
             "Bash(rm -rf /),Bash(git push --force*),Bash(git push -*f*),Bash(git
