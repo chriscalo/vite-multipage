@@ -1,8 +1,9 @@
 import vue from "@vitejs/plugin-vue";
+import { noFallback } from "vite-plugin-no-fallback";
 import { join, parse, resolve } from "path";
 
 export default {
-  plugins: [vue()],
+  plugins: [vue(), noFallback()],
   alias: {
     "~": __dirname,
   },
